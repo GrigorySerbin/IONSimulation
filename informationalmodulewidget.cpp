@@ -2,6 +2,7 @@
 
 InformationalModuleWidget::InformationalModuleWidget(InformationModule *infmod,QWidget *parent) : QWidget(parent)
 {
+    //Создание элементов интерфейса
     numberLabel = new QLabel("Номер");
     yearLabel = new QLabel("Год");
     monthLabel = new QLabel("Месяц");
@@ -15,9 +16,11 @@ InformationalModuleWidget::InformationalModuleWidget(InformationModule *infmod,Q
     voltage = new QDoubleSpinBox;
     temperature = new QSpinBox;
 
+    //Создание layouts для правильного отображения элементов
     gridLayout = new QGridLayout;
     mainLayout = new QHBoxLayout;
 
+    //Добавление виджетов в layout
     gridLayout->addWidget(voltageLabel, 0,0);
     gridLayout->addWidget(temperatureLabel, 1,0);
     gridLayout->addWidget(numberLabel, 2,0);
@@ -32,10 +35,13 @@ InformationalModuleWidget::InformationalModuleWidget(InformationModule *infmod,Q
 
     groupBox->setLayout(gridLayout);
     mainLayout->addWidget(groupBox);
+
+    //Передача главного layout виджету
     this->setLayout(mainLayout);
 
     groupBox->setTitle("Настройки МИОК");
 
+    //Настройка диапазонов значений МИОК
     voltage->setRange(0.0, 6.0);
     temperature->setRange(0, 255);
     number->setRange(0, 999);
@@ -44,12 +50,14 @@ InformationalModuleWidget::InformationalModuleWidget(InformationModule *infmod,Q
 
     informationModuleSettings = infmod;
 
+    //Присваивание полям виджета значений из настроек
     voltage->setValue(informationModuleSettings->get_voltage());
     temperature->setValue(informationModuleSettings->get_temperature());
     number->setValue(informationModuleSettings->get_number());
     year->setValue(informationModuleSettings->get_year());
     month->setValue(informationModuleSettings->get_month());
 
+    //Настройка слотов/сигналов
     connect(voltage, SIGNAL(editingFinished()), this, SLOT(voltage_changed_slot()));
     connect(temperature, SIGNAL(editingFinished()), this, SLOT(temperature_changed_slot()));
     connect(number, SIGNAL(editingFinished()), this, SLOT(number_changed_slot()));

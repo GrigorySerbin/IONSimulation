@@ -2,6 +2,7 @@
 
 ControlModuleWidget::ControlModuleWidget(ControlModule *contrMod,QWidget *parent) : QWidget(parent)
 {
+    //Создание элементов интерфейса
     outputPower = new QCheckBox("вкл.");
     powerBC = new QCheckBox("вкл. питание БС");
     MIOKConnection = new QCheckBox("соединение с МИОК");
@@ -10,9 +11,11 @@ ControlModuleWidget::ControlModuleWidget(ControlModule *contrMod,QWidget *parent
     CKY3Connection = new QCheckBox("соединение с СКУ3");
     BCConnection = new QCheckBox("соединение с БС");
 
+    //Создание layouts для правильного отображения элементов
     gridLayout = new QGridLayout;
     mainLayout = new QHBoxLayout;
 
+    //Добавление виджетов в layout
     gridLayout->addWidget(outputPower, 0,0);
     gridLayout->addWidget(powerBC, 0,1);
     gridLayout->addWidget(MIOKConnection, 1,0);
@@ -25,12 +28,15 @@ ControlModuleWidget::ControlModuleWidget(ControlModule *contrMod,QWidget *parent
 
     groupBox->setLayout(gridLayout);
     mainLayout->addWidget(groupBox);
+
+    //Передача главного layout виджету
     this->setLayout(mainLayout);
 
     groupBox->setTitle("Настройки МУК");
 
     controlModuleSetttings = contrMod;
 
+    //Присваивание полям виджета значений из настроек
     outputPower->setChecked(controlModuleSetttings->get_outputPower());
     powerBC->setChecked(controlModuleSetttings->get_powerBC());
     MIOKConnection->setChecked(controlModuleSetttings->get_MIOKConnection());
@@ -39,6 +45,7 @@ ControlModuleWidget::ControlModuleWidget(ControlModule *contrMod,QWidget *parent
     CKY3Connection->setChecked(controlModuleSetttings->get_CKY3Connection());
     BCConnection->setChecked(controlModuleSetttings->get_BCConnection());
 
+    //Настройка слотов/сигналов
     connect(outputPower, SIGNAL(stateChanged(int)), this, SLOT(outputPower_changed(int)));
     connect(powerBC, SIGNAL(stateChanged(int)), this, SLOT(powerBC_changed(int)));
     connect(MIOKConnection, SIGNAL(stateChanged(int)), this, SLOT(MIOKConnection_changed(int)));

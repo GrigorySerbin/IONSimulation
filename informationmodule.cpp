@@ -2,6 +2,7 @@
 
 InformationModule::InformationModule()
 {
+    //Настройки по умолчанию
     number = 0;
     month = 0;
     year = 0;

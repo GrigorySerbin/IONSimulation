@@ -23,7 +23,8 @@ SOURCES += main.cpp\
     batterymodulewidget.cpp \
     controlmodulewidget.cpp \
     informationalmodulewidget.cpp \
-    serialport.cpp
+    serialport.cpp \
+    settingswindow.cpp
 
 HEADERS  += mainwindow.h \
     batterymodule.h \
@@ -34,7 +35,8 @@ HEADERS  += mainwindow.h \
     batterymodulewidget.h \
     controlmodulewidget.h \
     informationalmodulewidget.h \
-    serialport.h
+    serialport.h \
+    settingswindow.h
 
 FORMS    += mainwindow.ui
 

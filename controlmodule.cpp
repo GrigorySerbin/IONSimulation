@@ -2,6 +2,7 @@
 
 ControlModule::ControlModule()
 {
+    //Настройка значений по умолчанию
     powerBC = false;
     outputPower = false;
     MIOKConnection = true;

@@ -2,7 +2,6 @@
 #define ACCUMULATORWIDGET_H
 
 #include <QDebug>
-
 #include <QWidget>
 #include <QLabel>
 #include <QCheckBox>

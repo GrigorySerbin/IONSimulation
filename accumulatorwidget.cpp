@@ -2,6 +2,7 @@
 
 AccumulatorWidget::AccumulatorWidget(int accumNumber, Accumulator *settings, QWidget *parent) : QWidget(parent)
 {
+    //Создание элементов интерфейса
     voltLabel = new QLabel("Напряжение");
     tempLabel = new QLabel("Температура");
     numberLabel = new QLabel("Номер");
@@ -22,9 +23,11 @@ AccumulatorWidget::AccumulatorWidget(int accumNumber, Accumulator *settings, QWi
     quarter = new QSpinBox;
     groupBox = new QGroupBox;
 
+    //Создание layouts для правильного отображения элементов
     gridLayout = new QGridLayout;
     mainLayout = new QHBoxLayout;
 
+    //Добавление виджетов в layout
     gridLayout->addWidget(voltLabel, 0,0);
     gridLayout->addWidget(voltage, 0,1);
     gridLayout->addWidget(power, 0,3);
@@ -48,11 +51,14 @@ AccumulatorWidget::AccumulatorWidget(int accumNumber, Accumulator *settings, QWi
 
     groupBox->setLayout(gridLayout);
     mainLayout->addWidget(groupBox);
+
+    //Передача главного layout виджету
     this->setLayout(mainLayout);
 
     groupBox->setTitle("BM" + QString::number(accumNumber/26 + 1) +
                        " Аккумулятор " + QString::number(1 + accumNumber - (accumNumber/26)*26));
 
+    //Настройка диапазонов значений аккумулятора
     voltage->setRange(0.0, 6.0);
     temperature->setRange(0, 255);
     number->setRange(0, 9999);
@@ -61,6 +67,7 @@ AccumulatorWidget::AccumulatorWidget(int accumNumber, Accumulator *settings, QWi
 
     accumSettings = settings;
 
+    //Присваивание полям виджета значений из настроек
     randVolt->setChecked(accumSettings->get_rand_volt());
     normVolt->setChecked(accumSettings->get_normal_volt());
     randTemp->setChecked(accumSettings->get_rand_temp());
@@ -75,6 +82,7 @@ AccumulatorWidget::AccumulatorWidget(int accumNumber, Accumulator *settings, QWi
     quarter->setValue(accumSettings->get_quarter());
 
 
+    //Настройка слотов/сигналов
     connect(randVolt, SIGNAL(stateChanged(int)), this, SLOT(rand_volt_slot(int)));
     connect(normVolt, SIGNAL(stateChanged(int)), this, SLOT(norm_volt_slot(int)));
     connect(randTemp, SIGNAL(stateChanged(int)), this, SLOT(rand_temp_slot(int)));

@@ -2,6 +2,7 @@
 
 BatteryModule::BatteryModule()
 {
+    //Настройка значений по умолчанию
     is_on = true;
     number = 0;
     year = 0;

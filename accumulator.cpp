@@ -2,6 +2,7 @@
 
 Accumulator::Accumulator()
 {
+    //настройки по умолчанию
     is_on = true;
     rand_volt = true;
     normal_volt = true;

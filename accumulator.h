@@ -2,8 +2,8 @@
 #define ACCUMULATOR_H
 
 #include <QDebug>
-
 #include <cstdlib>
+
 
 class Accumulator
 {

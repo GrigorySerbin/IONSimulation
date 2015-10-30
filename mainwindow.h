@@ -18,10 +18,7 @@
 #include "batterymodule.h"
 #include "controlmodule.h"
 #include "informationmodule.h"
-#include "accumulatorwidget.h"
-#include "batterymodulewidget.h"
-#include "controlmodulewidget.h"
-#include "informationalmodulewidget.h"
+#include "settingswindow.h"
 
 namespace Ui {
 class MainWindow;
@@ -39,13 +36,13 @@ private slots:
     void connect_button_clicked();
     void clear_button_clicked();
     void process_data();
+    void delete_settings_window();
 
 private:
     Ui::MainWindow *ui;
 
     SerialPort *serialPort;
 
-    QGridLayout *scrollAreaLayout;
     QGridLayout *comConnectionLayout;
     QGridLayout *mainLayout;
 
@@ -55,19 +52,14 @@ private:
     QPushButton *clearScrollArea;
     QPushButton *settings;
     QTextBrowser *informationBrowser;
-    QScrollArea *settingsScrollArea;
     QWidget *centralWidget;
-    QWidget *scrollAreaWidget;
 
     BatteryModule bm[3];
     Accumulator accum[78];
     ControlModule MYKmodule;
     InformationModule MIOKmodule;
 
-    AccumulatorWidget *accumWingets[78];
-    BatteryModuleWidget *batteryWidgets[3];
-    ControlModuleWidget *controlModuleWidget;
-    InformationalModuleWidget *informationModuleWidget;
+    SettingsWindow *settingsWindow;
 
     void load_settings();
     void save_settings();

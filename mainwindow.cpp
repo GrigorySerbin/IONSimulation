@@ -8,95 +8,72 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     load_settings();
 
-    for(int i = 0; i < 78; i++)
-        accumWingets[i] = new AccumulatorWidget(i, &accum[i]);
+    this->setWindowTitle("Симулятор зарядного устройства");
 
-    for(int i = 0; i < 3; i++)
-        batteryWidgets[i] = new BatteryModuleWidget(i+1, &bm[i]);
+    //Создание объекта СОМ порта
+    serialPort = new SerialPort(this);
 
-    controlModuleWidget = new ControlModuleWidget(&MYKmodule);
-
-    informationModuleWidget = new InformationalModuleWidget(&MIOKmodule);
-
-    scrollAreaLayout = new QGridLayout;
-
-    scrollAreaLayout->addWidget(informationModuleWidget, 0, 0, 1, 2);
-    scrollAreaLayout->addWidget(controlModuleWidget, 0, 2);
-
-    for(int i = 0; i < 3; i++)
-        scrollAreaLayout->addWidget(batteryWidgets[i], 1, i);
-
-    for(int i = 0; i < 78; i++)
-        scrollAreaLayout->addWidget(accumWingets[i], i+2, 0, 1, 3);
-
-    settingsScrollArea = new QScrollArea;
-    scrollAreaWidget = new QWidget;
-    scrollAreaWidget->setLayout(scrollAreaLayout);
-    settingsScrollArea->setWidget(scrollAreaWidget);
-
-    serialPort = new SerialPort;
-
-    comSelect = new QComboBox;
+    //Создание элементов для выбора СОМ порта и его подключения
+    comSelect = new QComboBox(this);
     comSelect->addItems(serialPort->ports());
-    informationLabel = new QLabel("Выберите COM порт");
-    connectButton = new QPushButton("Подключить");
-    clearScrollArea = new QPushButton("Очистить");
+    informationLabel = new QLabel("Выберите COM порт", this);
+    connectButton = new QPushButton("Подключить", this);
+    clearScrollArea = new QPushButton("Очистить", this);
 
-    informationBrowser = new QTextBrowser;
+    //Виджет для отображения принимаемых посылок
+    informationBrowser = new QTextBrowser(this);
 
+    //Layoutы для правильного отображения элементов
     comConnectionLayout = new QGridLayout;
     mainLayout = new QGridLayout;
 
+    //Добавление виджетов в layout
     comConnectionLayout->addWidget(informationLabel, 0, 0);
     comConnectionLayout->addWidget(comSelect, 0, 1);
     comConnectionLayout->addWidget(connectButton, 1, 0);
     comConnectionLayout->addWidget(clearScrollArea, 1, 1);
 
-    settings = new QPushButton("Параметры");
+    settings = new QPushButton("Параметры", this);
 
     mainLayout->addWidget(settings, 0, 0);
     mainLayout->addLayout(comConnectionLayout, 0, 1);
     mainLayout->addWidget(informationBrowser, 1,0, 1, 2);
 
-    centralWidget = new QWidget;
+    centralWidget = new QWidget(this);
+
     centralWidget->setLayout(mainLayout);
+
+    //Назначение главному окну программы центрального виджета
     this->setCentralWidget(centralWidget);
 
+    //Настройка сигналов/слотов
     connect(settings, SIGNAL(pressed()), this, SLOT(settings_button_clicked()));
     connect(connectButton, SIGNAL(pressed()), this, SLOT(connect_button_clicked()));
     connect(clearScrollArea, SIGNAL(pressed()), this, SLOT(clear_button_clicked()));
     connect(serialPort, SIGNAL(ready_read_signal()), this, SLOT(process_data()));
-
-
 }
 
 MainWindow::~MainWindow()
 {
-    delete scrollAreaLayout;
+    save_settings();
     delete comConnectionLayout;
     delete mainLayout;
-
-    delete comSelect;
-    delete serialPort;
-    delete informationLabel;
-    delete connectButton;
-    delete clearScrollArea;
-    delete settings;
-    delete informationBrowser;
-    delete settingsScrollArea;
-    delete centralWidget;
-
-    save_settings();
     delete ui;
 }
 
 void MainWindow::settings_button_clicked()
 {
-    settingsScrollArea->show();
+    //Создание окна настроек по нажатию кнопки
+    settingsWindow = new SettingsWindow(accum, bm, &MYKmodule, &MIOKmodule);
+    settingsWindow->show();
+
+    //Соединение сигнала закрытия окна с слотом удаления окна
+    connect(settingsWindow, SIGNAL(windowClosed()), this, SLOT(delete_settings_window()));
 }
 
 void MainWindow::connect_button_clicked()
 {
+    //Если СОМ порт подключен - оключить и наоборот
     static bool status = false;
     if(!status)
         if(serialPort->setPort(comSelect->currentText()))
@@ -113,11 +90,14 @@ void MainWindow::connect_button_clicked()
 
 void MainWindow::clear_button_clicked()
 {
+    //Очистка поля для вывода принимаемых посылок
     informationBrowser->clear();
 }
 
 void MainWindow::process_data()
 {
+    //Функция для предварительной обработки посылки и
+    //выбора необходимой функции для обработки посылки
 
     QByteArray data = serialPort->read();
 
@@ -137,7 +117,7 @@ void MainWindow::process_data()
         return;
     }
 
-    //подсчет контрольной суммы с байта num до пердпоследнего байта
+    //подсчет контрольной суммы с байта num до предпоследнего байта
     //(последний байт - контрольная сумма)
     unsigned char c_sum = '\x00';
     for(int i = 2; i < num + 2; i++) c_sum += data[i];
@@ -158,6 +138,7 @@ void MainWindow::process_data()
     QBitArray command = byte_to_bits(command_byte);
 
 
+    //В зависимости от байта команд выбираем необходимую функцию
     switch(addr)
     {
     case MYK:
@@ -188,16 +169,26 @@ void MainWindow::process_data()
         break;
     }
 
-
+    //Вывод посылки на экран
     QString str(data.toHex().toUpper());
     informationBrowser->append(str);
 
 }
 
+void MainWindow::delete_settings_window()
+{
+    //Слот для удаления окна настроек
+    delete settingsWindow;
+    settingsWindow = nullptr;
+}
+
 void MainWindow::load_settings()
 {
+    //Функуия для загрузки настроек из .ini файла
+
     QSettings settings("settings.ini", QSettings::IniFormat);
 
+    //Загрузка настроек для МУК
     settings.beginGroup("MYK");
     MYKmodule.set_powerBC(settings.value("powerBC", false).toBool());
     MYKmodule.set_outputPower(settings.value("outputPower", false).toBool());
@@ -208,6 +199,7 @@ void MainWindow::load_settings()
     MYKmodule.set_BCConnection(settings.value("BCConnection", true).toBool());
     settings.endGroup();
 
+    //Загрузка настроек для МИОК
     settings.beginGroup("MIOK");
     MIOKmodule.set_number(settings.value("number", 0).toInt());
     MIOKmodule.set_month(settings.value("month", 0).toInt());
@@ -219,6 +211,7 @@ void MainWindow::load_settings()
 
     for(int i = 0; i < 3; i++)
     {
+        //Загрузка настроек для каждого батарейного модуля (БМ)
         settings.beginGroup("bm" + QString::number(i + 1));
         bm[i].set_on(settings.value("is_on", true).toBool());
         bm[i].set_number(settings.value("number", 0).toInt());
@@ -227,6 +220,7 @@ void MainWindow::load_settings()
 
         for(int j = 0; j < 26; j++)
         {
+            //Загрузка настроек для каждого аккумулятора
             settings.beginGroup("accum" + QString::number(j + 1));
 
             accum[i*26 + j].set_on(settings.value("is_on", true).toBool());
@@ -252,8 +246,10 @@ void MainWindow::load_settings()
 
 void MainWindow::save_settings()
 {
+    //Функция для записи настроек  в .ini файл
     QSettings settings("settings.ini", QSettings::IniFormat);
 
+    //Запсь настроек ддя МУК
     settings.beginGroup("MYK");
     settings.setValue("powerBC", MYKmodule.get_powerBC());
     settings.setValue("outputPower", MYKmodule.get_outputPower());
@@ -264,6 +260,7 @@ void MainWindow::save_settings()
     settings.setValue("BCConnection", MYKmodule.get_BCConnection());
     settings.endGroup();
 
+    //Запись настроек для МИОК
     settings.beginGroup("MIOK");
     settings.setValue("number", MIOKmodule.get_number());
     settings.setValue("month", MIOKmodule.get_month());
@@ -274,6 +271,7 @@ void MainWindow::save_settings()
 
     for(int i = 0; i < 3; i++)
     {
+        //Запсь настроек для каждого БМ
         settings.beginGroup("bm" + QString::number(i + 1));
 
         settings.setValue("is_on", bm[i].turned_on());
@@ -283,6 +281,7 @@ void MainWindow::save_settings()
 
         for(int j = 0; j < 26; j++)
         {
+            //Запись настроек для каждого аккумулятора
             settings.beginGroup("accum" + QString::number(j + 1));
 
             settings.setValue("is_on", accum[i*26 + j].turned_on());
@@ -307,6 +306,7 @@ void MainWindow::save_settings()
 
 QBitArray MainWindow::byte_to_bits(unsigned char com_byte)
 {
+    //Функция разбора байта команд на биты
     QBitArray bitArray(8);
     for(int i = 0; i < 8; i++) bitArray.setBit(7-i, com_byte&(1 << (7-i)));
     return bitArray;
@@ -316,32 +316,38 @@ QBitArray MainWindow::byte_to_bits(unsigned char com_byte)
 
 void MainWindow::processing_answer_for_MYK()
 {
+    //Функция обработки посылки для МУКа и
+    //формирования ответной посылки
 
+    if(!MYKmodule.get_outputPower()) return;
 
     QByteArray answer;
-    answer.append(startByteAnswer);
-    answer.append(startByteAnswer);
-    answer.append('\x07');
-    answer.append(MYK);
+    answer.append(startByteAnswer); //Стартовый байт
+    answer.append(startByteAnswer); //Стартовый байт
+    answer.append('\x07');          //Количество следующих байт
+    answer.append(MYK);             //Адрес модуля
     unsigned char stat = byte_formation(MYKmodule.get_powerBC(),
                                         MYKmodule.get_outputPower(),
                                         0,0,0,0,0,0);
-    answer.append(stat);
+    answer.append(stat);            //Байт статуса МУК
     unsigned char err_dc = byte_formation(0,0,0,
                                           !MYKmodule.get_MIOKConnection(),
                                           !MYKmodule.get_CKY1Connection(),
                                           !MYKmodule.get_CKY2Connection(),
                                           !MYKmodule.get_CKY3Connection(),
                                           !MYKmodule.get_BCConnection());
-    answer.append(err_dc);
-    answer.append('\x41');
-    answer.append('\x01');
-    answer.append('\x00');
+    answer.append(err_dc);          //Байт ошибок связи с другими модулями
+    answer.append('\x41');          //Установка тока
+    answer.append('\x01');          //Установка старшего байта напряжения
+    answer.append('\x00');          //Установка младшего байта напряжения
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < answer.size(); i++) c_sum += answer.at(i);
     c_sum ^= '\xFF';
     answer.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(answer);
 }
 
@@ -352,86 +358,102 @@ void MainWindow::processing_answer_for_BC()
 
 void MainWindow::processing_answer_for_MIOK_eeprom_write(QByteArray &answer)
 {
+    //Функция формирования ответа МИОКу в режиме записи в EEPROM
+
     unsigned char FN_H = answer.at(5);
     unsigned char FN_L = answer.at(6);
-    short int FN = (FN_H << 8) + FN_L;
-    int month = (int) answer.at(7);
-    int year = (int) answer.at(8) + 2000;
+    short int FN = (FN_H << 8) + FN_L;  //Номер Аккумуляторной батареи
+    int month = (int) answer.at(7);     //Месяц производства
+    int year = (int) answer.at(8) + 2000;   //Год производства
+
+    //Запись номера, месяца и года производства в настройки
     MIOKmodule.set_number(FN);
     MIOKmodule.set_month(month);
     MIOKmodule.set_year(year);
 
     //формирование ответной посылки
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x07);
-    responce.append(0xE1);
-    responce.append(0xE0);
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x07);                  //Количество следующих байт
+    responce.append(0xE1);                  //Адрес модуля
+    responce.append(0xE0);                  //Байт статуса МИОК
     FN = MIOKmodule.get_number();
     FN_L = FN;
     FN_H = FN >> 8;
-    responce.append(FN_H);
-    responce.append(FN_L);
-    responce.append(MIOKmodule.get_month());
-    responce.append(MIOKmodule.get_year() - 2000);
+    responce.append(FN_H);                  //Старший байт номера
+    responce.append(FN_L);                  //Младший байт номера
+    responce.append(MIOKmodule.get_month());            //Месяц изготовления
+    responce.append(MIOKmodule.get_year() - 2000);      //Год изготовления
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_MIOK_test_read()
 {
+    //Функция формирования ответа МИОКу в режиме чтения
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x09);
-    responce.append(0xE1);
-    responce.append(0xC0);
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x09);                  //Количество следующих байт
+    responce.append(0xE1);                  //Адрес модуля
+    responce.append(0xC0);                  //Байт статуса МИОК
     short int FN = MIOKmodule.get_number();
     char FN_L = FN;
     char FN_H = FN >> 8;
-    responce.append(FN_H);
-    responce.append(FN_L);
-    responce.append(MIOKmodule.get_month());
-    responce.append(MIOKmodule.get_year() - 2000);
+    responce.append(FN_H);                  //Старший байт номера
+    responce.append(FN_L);                  //Младший байт номера
+    responce.append(MIOKmodule.get_month());            //Месяц изготовления
+    responce.append(MIOKmodule.get_year() - 2000);      //Год изготовления
     short int VOLT = MIOKmodule.get_voltage() * 1000;
     char VOLT_L = VOLT;
     char VOLT_H = VOLT >> 8;
-    responce.append(VOLT_H);
-    responce.append(VOLT_L);
-    char c_sum = 0x00;
+    responce.append(VOLT_H);                  //Старший байт напряжения
+    responce.append(VOLT_L);                  //Младший байт напряжения
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
+    unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 
 }
 
 void MainWindow::processing_answer_for_MIOK_work_read()
 {
+    //Функция формирования ответа МИОКу в режиме работы
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x08);
-    responce.append(0xE1);
-    responce.append('\x00');
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x08);                  //Количество следующих байт
+    responce.append(0xE1);                  //Адрес модуля
+    responce.append('\x00');                  //Байт статуса МИОК
     short int VOLT = MIOKmodule.get_voltage() * 1000;
     char VOLT_L = VOLT;
     char VOLT_H = VOLT >> 8;
-    responce.append(VOLT_H);
-    responce.append(VOLT_L);
+    responce.append(VOLT_H);                  //Старший байт напряжения
+    responce.append(VOLT_L);                  //Младший байт напряжения
     short int TEMP = MIOKmodule.get_temperature();
     char TEMP_L = TEMP;
     char TEMP_H = TEMP >> 8;
-    responce.append(TEMP_H);
-    responce.append(TEMP_L);
-    responce.append(0x11);
-    char c_sum = 0x00;
+    responce.append(TEMP_H);                  //Старший байт температуры
+    responce.append(TEMP_L);                  //Младший байт температуры
+    responce.append(0x11);                    //Байт состояния МИОК
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
+    unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
@@ -442,9 +464,13 @@ void MainWindow::processing_answer_for_MIOK_work_read()
 
 void MainWindow::processing_answer_for_CKY1_eeprom_write(QByteArray &answer)
 {
-    int FN = (int) answer.at(5);
-    int month = (int) answer.at(6);
-    int year = (int) answer.at(7);
+    //Функция формирования ответа СКУ1 в режиме записи в EEPROM
+
+    int FN = (int) answer.at(5);        //Номер батарейного модуля (БМ)
+    int month = (int) answer.at(6);     //Месяц изготовления БМ
+    int year = (int) answer.at(7);      //Год изготовления БМ
+
+    //Запись номера, месяца и года производства в настройки
     bm[0].set_number(FN);
     bm[0].set_month(month);
     bm[0].set_year(year + 2000);
@@ -453,100 +479,107 @@ void MainWindow::processing_answer_for_CKY1_eeprom_write(QByteArray &answer)
     for (int i = 0; i < 26; i++)
     {
         ++counter;
-        accum[i].set_year((int)answer.at(++counter) + 2000);
-        accum[i].set_quarter((int)answer.at(++counter));
+        accum[i].set_year((int)answer.at(++counter) + 2000);       //Запись в настройки года производства аккумулятора
+        accum[i].set_quarter((int)answer.at(++counter));           //Запись в настройки квартала производства аккумулятора
         unsigned char FN_H = answer.at(++counter);
         unsigned char FN_L = answer.at(++counter);
         FN = (FN_H << 8) + FN_L;
-        accum[i].set_number(FN);
+        accum[i].set_number(FN);                                   //Запись в настройки номера аккумулятора
     }
 
     //формирование ответной посылки
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY1);
-    responce.append(0xE0);
-    responce.append((unsigned char) bm[0].get_number());
-    responce.append((unsigned char) bm[0].get_month());
-    responce.append((unsigned char) (bm[0].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY1);                  //Адрес модуля
+    responce.append(0xE0);                  //Байт статуса СКУ1
+    responce.append((unsigned char) bm[0].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[0].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[0].get_year() - 2000)); //Год производства БМ
 
     for (int i = 0; i < 26; i++)
     {
         unsigned char num = i + 1;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
-    //QString str(responce.toHex().toUpper());
-    //informationBrowser->append(str);
 
 }
 
 void MainWindow::processing_answer_for_CKY1_test_read()
 {
+    //Функция формирования ответа СКУ1 в режиме чтения
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY1);
-    responce.append(0xC0);
-    responce.append((unsigned char) bm[0].get_number());
-    responce.append((unsigned char) bm[0].get_month());
-    responce.append((unsigned char) (bm[0].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY1);                  //Адрес модуля
+    responce.append(0xC0);                  //Байт статуса СКУ1
+    responce.append((unsigned char) bm[0].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[0].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[0].get_year() - 2000)); //Год производства БМ
 
     for (int i = 0; i < 26; i++)
     {
         unsigned char num = i + 1;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_CKY1_work_read()
 {
+    //Функция формирования ответа СКУ1 в режиме работы
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY1);
-    responce.append(0x40);
-    responce.append(0x38);
-    responce.append(0xC0);
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY1);                  //Адрес модуля
+    responce.append(0x40);                  //Байт статуса СКУ1
+    responce.append(0x38);                  //Байт состояния СКУ1
+    responce.append(0xC0);                  //Байт состояния СКУ1
     for (int i = 0; i < 26; i++)
     {
         short int VOLT = accum[i].get_volt() * 1000;
         unsigned char VOLT_L = VOLT;
         unsigned char VOLT_H = VOLT >> 8;
-        responce.append(VOLT_H);
-        responce.append(VOLT_L);
+        responce.append(VOLT_H);            //Старший байт напряжения
+        responce.append(VOLT_L);            //Младший байт напряжения
         unsigned char temp = accum[i].get_temp();
-        responce.append(temp);
+        responce.append(temp);              //Байт температуры
         unsigned char Axx_F = byte_formation(accum[i].get_normal_volt(),
                                              accum[i].get_normal_volt(),
                                              accum[i].get_normal_temp(),
@@ -555,14 +588,16 @@ void MainWindow::processing_answer_for_CKY1_work_read()
                                              accum[i].get_ballance(),
                                              0,0);
 
-        responce.append(Axx_F);
+        responce.append(Axx_F);             //Байт состояния аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 
 
@@ -571,9 +606,13 @@ void MainWindow::processing_answer_for_CKY1_work_read()
 
 void MainWindow::processing_answer_for_CKY2_eeprom_write(QByteArray &answer)
 {
-    int FN = (int) answer.at(5);
-    int month = (int) answer.at(6);
-    int year = (int) answer.at(7);
+    //Функция формирования ответа СКУ2 в режиме записи в EEPROM
+
+    int FN = (int) answer.at(5);        //Номер батарейного модуля (БМ)
+    int month = (int) answer.at(6);     //Месяц изготовления БМ
+    int year = (int) answer.at(7);      //Год изготовления БМ
+
+    //Запись номера, месяца и года производства в настройки
     bm[1].set_number(FN);
     bm[1].set_month(month);
     bm[1].set_year(year + 2000);
@@ -582,97 +621,106 @@ void MainWindow::processing_answer_for_CKY2_eeprom_write(QByteArray &answer)
     for (int i = 26; i < 52; i++)
     {
         ++counter;
-        accum[i].set_year((int)answer.at(++counter) + 2000);
-        accum[i].set_quarter((int)answer.at(++counter));
+        accum[i].set_year((int)answer.at(++counter) + 2000);       //Запись в настройки года производства аккумулятора
+        accum[i].set_quarter((int)answer.at(++counter));           //Запись в настройки квартала производства аккумулятора
         unsigned char FN_H = answer.at(++counter);
         unsigned char FN_L = answer.at(++counter);
         FN = (FN_H << 8) + FN_L;
-        accum[i].set_number(FN);
+        accum[i].set_number(FN);                                   //Запись в настройки номера аккумулятора
     }
 
     //формирование ответной посылки
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY2);
-    responce.append(0xE0);
-    responce.append((unsigned char) bm[1].get_number());
-    responce.append((unsigned char) bm[1].get_month());
-    responce.append((unsigned char) (bm[1].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY2);                  //Адрес модуля
+    responce.append(0xE0);                  //Байт статуса СКУ2
+    responce.append((unsigned char) bm[1].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[1].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[1].get_year() - 2000)); //Год производства БМ
 
     for (int i = 26; i < 52; i++)
     {
         unsigned char num = i - 25;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_CKY2_test_read()
 {
+    //Функция формирования ответа СКУ2 в режиме чтения
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY2);
-    responce.append(0xC0);
-    responce.append((unsigned char) bm[1].get_number());
-    responce.append((unsigned char) bm[1].get_month());
-    responce.append((unsigned char) (bm[1].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY2);                  //Адрес модуля
+    responce.append(0xC0);                  //Байт статуса СКУ2
+    responce.append((unsigned char) bm[1].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[1].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[1].get_year() - 2000)); //Год производства БМ
 
     for (int i = 26; i < 52; i++)
     {
         unsigned char num = i - 25;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_CKY2_work_read()
 {
+    //Функция формирования ответа СКУ2 в режиме работы
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY2);
-    responce.append(0x40);
-    responce.append(0x38);
-    responce.append(0xC0);
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY2);                  //Адрес модуля
+    responce.append(0x40);                  //Байт статуса СКУ2
+    responce.append(0x38);                  //Байт состояния СКУ2
+    responce.append(0xC0);                  //Байт состояния СКУ2
     for (int i = 26; i < 52; i++)
     {
         short int VOLT = accum[i].get_volt() * 1000;
         unsigned char VOLT_L = VOLT;
         unsigned char VOLT_H = VOLT >> 8;
-        responce.append(VOLT_H);
-        responce.append(VOLT_L);
+        responce.append(VOLT_H);            //Старший байт напряжения
+        responce.append(VOLT_L);            //Младший байт напряжения
         unsigned char temp = accum[i].get_temp();
-        responce.append(temp);
+        responce.append(temp);              //Байт температуры
         unsigned char Axx_F = byte_formation(accum[i].get_normal_volt(),
                                              accum[i].get_normal_volt(),
                                              accum[i].get_normal_temp(),
@@ -681,23 +729,29 @@ void MainWindow::processing_answer_for_CKY2_work_read()
                                              accum[i].get_ballance(),
                                              0,0);
 
-        responce.append(Axx_F);
+        responce.append(Axx_F);             //Байт состояния аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 
 void MainWindow::processing_answer_for_CKY3_eeprom_write(QByteArray &answer)
 {
-    int FN = (int) answer.at(5);
-    int month = (int) answer.at(6);
-    int year = (int) answer.at(7);
+    //Функция формирования ответа СКУ3 в режиме записи в EEPROM
+
+    int FN = (int) answer.at(5);        //Номер батарейного модуля (БМ)
+    int month = (int) answer.at(6);     //Месяц изготовления БМ
+    int year = (int) answer.at(7);      //Год изготовления БМ
+
+    //Запись номера, месяца и года производства в настройки
     bm[2].set_number(FN);
     bm[2].set_month(month);
     bm[2].set_year(year + 2000);
@@ -706,97 +760,107 @@ void MainWindow::processing_answer_for_CKY3_eeprom_write(QByteArray &answer)
     for (int i = 52; i < 78; i++)
     {
         ++counter;
-        accum[i].set_year((int)answer.at(++counter) + 2000);
-        accum[i].set_quarter((int)answer.at(++counter));
+        accum[i].set_year((int)answer.at(++counter) + 2000);       //Запись в настройки года производства аккумулятора
+        accum[i].set_quarter((int)answer.at(++counter));           //Запись в настройки квартала производства аккумулятора
+        unsigned char FN_H = answer.at(++counter);
         unsigned char FN_H = answer.at(++counter);
         unsigned char FN_L = answer.at(++counter);
         FN = (FN_H << 8) + FN_L;
-        accum[i].set_number(FN);
+        accum[i].set_number(FN);                                   //Запись в настройки номера аккумулятора
     }
 
     //формирование ответной посылки
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY3);
-    responce.append(0xE0);
-    responce.append((unsigned char) bm[2].get_number());
-    responce.append((unsigned char) bm[2].get_month());
-    responce.append((unsigned char) (bm[2].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY3);                  //Адрес модуля
+    responce.append(0xE0);                  //Байт статуса СКУ2
+    responce.append((unsigned char) bm[2].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[2].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[2].get_year() - 2000)); //Год производства БМ
 
     for (int i = 52; i < 78; i++)
     {
         unsigned char num = i - 51;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
+
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_CKY3_test_read()
 {
+    //Функция формирования ответа СКУ3 в режиме чтения
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY3);
-    responce.append(0xC0);
-    responce.append((unsigned char) bm[2].get_number());
-    responce.append((unsigned char) bm[2].get_month());
-    responce.append((unsigned char) (bm[2].get_year() - 2000));
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY3);                  //Адрес модуля
+    responce.append(0xC0);                  //Байт статуса СКУ2
+    responce.append((unsigned char) bm[2].get_number());        //Номер БМ
+    responce.append((unsigned char) bm[2].get_month());         //Месяц производства БМ
+    responce.append((unsigned char) (bm[2].get_year() - 2000)); //Год производства БМ
 
     for (int i = 52; i < 78; i++)
     {
         unsigned char num = i - 51;
-        responce.append(num);
-        responce.append((unsigned char) (accum[i].get_year() - 2000));
-        responce.append((unsigned char) accum[i].get_quarter());
-        short int FN = accum[i].get_number();
+        responce.append(num);                                           //Порядковый номер аккумулятора
+        responce.append((unsigned char) (accum[i].get_year() - 2000));  //Год производства аккумулятора
+        responce.append((unsigned char) accum[i].get_quarter());        //Квартал производства аккумулятора
+        short int FN = accum[i].get_number();                           //Заводской номер аккумулятора
         unsigned  char FN_L = FN;
         unsigned char FN_H = FN >> 8;
-        responce.append(FN_H);
-        responce.append(FN_L);
+        responce.append(FN_H);                                          //Старший байт заводского номера аккумулятора
+        responce.append(FN_L);                                          //Младший байт заводского номера аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 void MainWindow::processing_answer_for_CKY3_work_read()
 {
+    //Функция формирования ответа СКУ3 в режиме работы
+
     QByteArray responce;
-    responce.append(startByteAnswer);
-    responce.append(startByteAnswer);
-    responce.append(0x88);
-    responce.append(CKY3);
-    responce.append(0x40);
-    responce.append(0x38);
-    responce.append(0xC0);
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(startByteAnswer);       //Стартовый байт
+    responce.append(0x88);                  //Количество следующих байт
+    responce.append(CKY3);                  //Адрес модуля
+    responce.append(0x40);                  //Байт статуса СКУ3
+    responce.append(0x38);                  //Байт состояния СКУ3
+    responce.append(0xC0);                  //Байт состояния СКУ3
     for (int i = 52; i < 78; i++)
     {
         short int VOLT = accum[i].get_volt() * 1000;
         unsigned char VOLT_L = VOLT;
         unsigned char VOLT_H = VOLT >> 8;
-        responce.append(VOLT_H);
-        responce.append(VOLT_L);
+        responce.append(VOLT_H);            //Старший байт напряжения
+        responce.append(VOLT_L);            //Младший байт напряжения
         unsigned char temp = accum[i].get_temp();
-        responce.append(temp);
+        responce.append(temp);              //Байт температуры
         unsigned char Axx_F = byte_formation(accum[i].get_normal_volt(),
                                              accum[i].get_normal_volt(),
                                              accum[i].get_normal_temp(),
@@ -805,20 +869,24 @@ void MainWindow::processing_answer_for_CKY3_work_read()
                                              accum[i].get_ballance(),
                                              0,0);
 
-        responce.append(Axx_F);
+        responce.append(Axx_F);             //Байт состояния аккумулятора
     }
 
+    //Подсчет контрольной суммы (с инверсией, без учета переполнения)
     unsigned char c_sum = 0x00;
     for (int i = 2; i < responce.size(); i++) c_sum += responce.at(i);
     c_sum ^= 0xFF;
     responce.append(c_sum);
 
+    //Запись посылки в СОМ порт
     serialPort->write(responce);
 }
 
 unsigned char MainWindow::byte_formation(int seventh, int sixth, int fifth, int fourth,
                                          int third, int second, int first, int zero)
 {
+    //Фукция формирования байта
+
     unsigned char byte = '\x00';
     byte |= seventh ? '\x01' : '\x00';
     byte <<= 1;
